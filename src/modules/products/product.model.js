@@ -1,95 +1,83 @@
 const mongoose = require("mongoose");
-const Counter = require("../../models/counter.model");
 
-
-const generateUID = () =>
-  Math.random().toString(36).substring(2, 10).toUpperCase();
-
-
-
-const variantSchema = new mongoose.Schema({
-  variantId: { type: Number, unique: true },       
-  variantUid: { type: String, unique: true },     
-  name: { type: String, required: true },          
-  options: [{ type: String, required: true }]     
+const priceSchema = new mongoose.Schema({
+  regular: { type: Number, required: true },
+  sale: { type: Number },
+  currency: { type: String, default: "INR" },
 });
 
-
-variantSchema.pre("save", async function (next) {
-  if (!this.variantId) {
-    const counter = await Counter.findOneAndUpdate(
-      { model: "Variant" },
-      { $inc: { count: 1 } },
-      { new: true, upsert: true }
-    );
-    this.variantId = counter.count;
-  }
-
-  if (!this.variantUid) {
-    this.variantUid = generateUID();  
-  }
-
-  next();
+const inventorySchema = new mongoose.Schema({
+  stock_quantity: { type: Number, default: 0 },
+  stock_status: {
+    type: String,
+    enum: ["in_stock", "out_of_stock"],
+    default: "in_stock",
+  },
 });
 
+const subscriptionSchema = new mongoose.Schema({
+  billing_cycle: String,
+  billing_interval: Number,
+  trial_period_days: Number,
+  subscription_price: priceSchema,
+  auto_renew: Boolean,
+});
 
+const comboSchema = new mongoose.Schema({
+  items: [
+    {
+      product_id: String,
+      quantity: Number,
+    },
+  ],
+  combo_price: priceSchema,
+});
+
+const variationSchema = new mongoose.Schema({
+  variation_id: String,
+  sku: String,
+  attributes: [
+    {
+      name: String,
+      value: String,
+    },
+  ],
+  price: priceSchema,
+  inventory: inventorySchema,
+});
 
 const productSchema = new mongoose.Schema(
   {
-    
-    productId: { type: Number, unique: true },
-
-    productUid: { type: String, unique: true },
-
-    name: { type: String, required: true, trim: true },
-
-    description: { type: String },
-
-    price: { type: Number, required: true },
-    stock: { type: Number, default: 0 },
-
-    sku: { type: String },
-
-    category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
-
-
-    images: [{ type: String }],  
-
-    visibility: { type: Boolean, default: true },
-
-    seo: {
-      metaTitle: String,
-      metaDescription: String,
+    product_id: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    slug: { type: String, required: true },
+    product_type: {
+      type: String,
+      enum: ["simple", "variation", "combo", "subscription"],
+      required: true,
     },
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+    },
+    price: priceSchema,
+    inventory: inventorySchema,
 
-    variants: [variantSchema],
+    variations: [variationSchema],
 
-    status: { type: String, enum: ["active", "inactive"], default: "active" }
+    combo_details: comboSchema,
+
+    subscription_details: subscriptionSchema,
+
+    images: [
+      {
+        url: String,
+        alt_text: String,
+        is_primary: Boolean,
+      },
+    ],
   },
   { timestamps: true }
 );
-
-
-
-productSchema.pre("save", async function (next) {
-  // Auto-increment productId
-  if (!this.productId) {
-    const counter = await Counter.findOneAndUpdate(
-      { model: "Product" },
-      { $inc: { count: 1 } },
-      { new: true, upsert: true }
-    );
-    this.productId = counter.count;
-  }
-
-
-  if (!this.productUid) {
-    this.productUid = generateUID();   
-  }
-
-  next();
-});
-
-
 
 module.exports = mongoose.model("Product", productSchema);
